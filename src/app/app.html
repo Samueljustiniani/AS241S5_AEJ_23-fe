@@ -1,0 +1,274 @@
+<main class="app-shell">
+  <section class="hero-card">
+    <div class="hero-copy">
+      <div class="eyebrow">{{ title }}</div>
+      <h1>CRUD reactivo de consultas IA</h1>
+      <p>{{ subtitle }}</p>
+      <div class="hero-message">{{ feedback }}</div>
+      <div class="hero-metrics">
+        <article>
+          <span>Total</span>
+          <strong>{{ totalCount }}</strong>
+        </article>
+        <article>
+          <span>Activas</span>
+          <strong>{{ activasCount }}</strong>
+        </article>
+        <article>
+          <span>Eliminadas</span>
+          <strong>{{ inactivasCount }}</strong>
+        </article>
+      </div>
+    </div>
+    <div class="hero-aside">
+      <div class="hero-chip">Angular + WebFlux</div>
+      <div class="hero-chip soft">Persistencia PostgreSQL</div>
+      <div class="hero-chip accent">Borrado lógico</div>
+    </div>
+  </section>
+
+  <section class="workspace-grid">
+    <article class="panel form-panel">
+      <div class="panel-heading">
+        <div>
+          <span class="panel-tag">Create / Update</span>
+          <h2>{{ editingId === null ? 'Nueva consulta' : 'Editar consulta #' + editingId }}</h2>
+        </div>
+        <button class="ghost-button" type="button" (click)="startNewConsultation()">Limpiar</button>
+      </div>
+
+      <form class="stack-form" [formGroup]="consultaForm" (ngSubmit)="saveConsultation()">
+        <label class="field">
+          <span>Escribe la consulta</span>
+          <textarea
+            rows="6"
+            formControlName="pregunta"
+            placeholder="Ejemplo: Resume en dos líneas cómo resolver un problema de inventario con IA..."
+          ></textarea>
+        </label>
+
+        <div class="field-hint">
+          <span>Se guarda la pregunta y la respuesta generada por la API de IA.</span>
+          @if (consultaForm.controls.pregunta.touched && consultaForm.controls.pregunta.invalid) {
+            <span class="error-text">La consulta debe tener entre 8 y 500 caracteres.</span>
+          }
+        </div>
+
+        <div class="action-row">
+          <button class="primary-button" type="submit" [disabled]="isLoading">
+            {{ editingId === null ? 'Registrar consulta' : 'Actualizar consulta' }}
+          </button>
+          <button class="secondary-button" type="button" (click)="refresh()" [disabled]="isLoading">
+            Recargar historial
+          </button>
+        </div>
+      </form>
+    </article>
+
+    <article class="panel voice-panel">
+      <div class="panel-heading">
+        <div>
+          <span class="panel-tag">API IA 2</span>
+          <h2>Text to Speech</h2>
+        </div>
+      </div>
+
+      <form class="stack-form" [formGroup]="ttsForm" (ngSubmit)="generateVoice()">
+        <label class="field">
+          <span>Texto de salida</span>
+          <textarea rows="5" formControlName="input" placeholder="Texto que quieres escuchar"></textarea>
+        </label>
+
+        <label class="field two-columns">
+          <span>Voz</span>
+          <select formControlName="voice">
+            <option value="alloy">Alloy</option>
+            <option value="echo">Echo</option>
+            <option value="fable">Fable</option>
+            <option value="onyx">Onyx</option>
+            <option value="nova">Nova</option>
+            <option value="shimmer">Shimmer</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Instrucciones</span>
+          <input type="text" formControlName="instructions" placeholder="Tono, velocidad o intención" />
+        </label>
+
+        <div class="field-hint">
+          <span>La respuesta llega como audio MPEG y se reproduce abajo.</span>
+          @if (ttsForm.controls.input.touched && ttsForm.controls.input.invalid) {
+            <span class="error-text">Ingresa al menos 6 caracteres.</span>
+          }
+        </div>
+
+        <div class="action-row">
+          <button class="primary-button" type="submit" [disabled]="isLoading">Generar audio</button>
+        </div>
+      </form>
+
+      <div class="audio-card">
+        <span class="audio-label">Reproducción</span>
+        <p>{{ audioMessage }}</p>
+        @if (audioUrl) {
+          <audio [src]="audioUrl" controls></audio>
+        }
+      </div>
+    </article>
+  </section>
+
+  <section class="panel list-panel">
+    <div class="panel-heading list-heading">
+      <div>
+        <span class="panel-tag">TTS / History</span>
+        <h2>Historial de audios generados</h2>
+      </div>
+
+      <div class="filter-strip">
+        @for (option of ttsFilters; track option.value) {
+          <button
+            type="button"
+            class="filter-pill"
+            [class.active]="selectedTtsFilter === option.value"
+            (click)="setTtsFilter(option.value)"
+          >
+            <span>{{ option.label }}</span>
+            <small>{{ option.hint }}</small>
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="hero-metrics" style="margin-top: 0; margin-bottom: 18px;">
+      <article>
+        <span>Total</span>
+        <strong>{{ ttsTotalCount }}</strong>
+      </article>
+      <article>
+        <span>Activos</span>
+        <strong>{{ ttsActiveCount }}</strong>
+      </article>
+      <article>
+        <span>Eliminados</span>
+        <strong>{{ ttsInactiveCount }}</strong>
+      </article>
+    </div>
+
+    @if (isLoading) {
+      <div class="state-box loading-box">
+        <div class="spinner"></div>
+        <span>Sincronizando el historial de audio...</span>
+      </div>
+    } @else if (ttsHistoryVisible.length > 0) {
+      <div class="consultas-grid">
+        @for (item of ttsHistoryVisible; track item.id) {
+          <article class="consulta-card" [class.inactive]="item.status === 0">
+            <div class="consulta-topline">
+              <span class="status-badge" [class.state-active]="item.status === 1" [class.state-inactive]="item.status === 0">
+                {{ item.status === 1 ? 'Activo' : 'Eliminado' }}
+              </span>
+              <span class="consulta-id">#{{ item.id }}</span>
+            </div>
+
+            <h3>{{ preview(item.inputText, 90) }}</h3>
+            <p class="consulta-body">{{ formatDate(item.createdAt) }}</p>
+
+            <audio [src]="ttsAudioUrl(item)" controls preload="none" style="width: 100%; margin-top: 12px;"></audio>
+
+            <div class="action-row compact">
+              <button class="secondary-button" type="button" (click)="loadTtsFromHistory(item)">
+                Usar en formulario
+              </button>
+              @if (item.status === 1) {
+                <button class="danger-button" type="button" (click)="deleteTtsHistory(item)">
+                  Borrado lógico
+                </button>
+              } @else {
+                <button class="secondary-button" type="button" (click)="restoreTtsHistory(item)">
+                  Reactivar
+                </button>
+              }
+            </div>
+          </article>
+        }
+      </div>
+    } @else {
+      <div class="state-box empty-box">
+        <strong>No hay audios en esta vista.</strong>
+        <span>Genera un audio nuevo o cambia el filtro para ver otra categoría.</span>
+      </div>
+    }
+  </section>
+
+  <section class="panel list-panel">
+    <div class="panel-heading list-heading">
+      <div>
+        <span class="panel-tag">Read / Delete</span>
+        <h2>Historial de consultas guardadas</h2>
+      </div>
+
+      <div class="filter-strip">
+        @for (option of filters; track option.value) {
+          <button
+            type="button"
+            class="filter-pill"
+            [class.active]="selectedFilter === option.value"
+            (click)="setFilter(option.value)"
+          >
+            <span>{{ option.label }}</span>
+            <small>{{ option.hint }}</small>
+          </button>
+        }
+      </div>
+    </div>
+
+    @if (isLoading) {
+      <div class="state-box loading-box">
+        <div class="spinner"></div>
+        <span>Sincronizando con el backend reactivo...</span>
+      </div>
+    } @else if (consultasVisibles.length > 0) {
+      <div class="consultas-grid">
+        @for (consulta of consultasVisibles; track consulta.id) {
+          <article class="consulta-card" [class.inactive]="consulta.status === 0">
+            <div class="consulta-topline">
+              <span class="status-badge" [class.state-active]="consulta.status === 1" [class.state-inactive]="consulta.status === 0">
+                {{ statusLabel(consulta.status) }}
+              </span>
+              <span class="consulta-id">#{{ consulta.id }}</span>
+            </div>
+
+            <h3>{{ preview(consulta.pregunta, 90) }}</h3>
+            <p class="consulta-body">{{ preview(consulta.respuesta, 220) }}</p>
+
+            <div class="consulta-meta">
+              <span>{{ formatDate(consulta.fechaRegistro) }}</span>
+            </div>
+
+            <div class="action-row compact">
+              @if (consulta.status === 1) {
+                <button class="secondary-button" type="button" (click)="editConsultation(consulta)">
+                  Editar
+                </button>
+                <button class="danger-button" type="button" (click)="deleteConsultation(consulta)">
+                  Borrado lógico
+                </button>
+              } @else {
+                <button class="secondary-button" type="button" (click)="restoreConsultation(consulta)">
+                  Reactivar
+                </button>
+              }
+            </div>
+          </article>
+        }
+      </div>
+    } @else {
+      <div class="state-box empty-box">
+        <strong>No hay consultas en esta vista.</strong>
+        <span>Registra una consulta nueva o cambia el filtro para ver otro estado.</span>
+      </div>
+      
+    }
+  </section>
+</main>
