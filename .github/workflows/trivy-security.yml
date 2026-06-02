@@ -1,0 +1,65 @@
+name: Trivy Security Scan
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    branches:
+      - develop
+  schedule:
+    # Ejecutar todos los días a las 8:00 AM hora Perú (UTC-5) → 1:00 PM UTC
+    - cron: '0 13 * * *'
+  workflow_dispatch:  # Permite ejecución manual desde la interfaz de GitHub
+
+jobs:
+  trivy-security:
+    name: Trivy Filesystem Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Project
+        run: npm run build
+
+      # =========================================================
+      # INSTALACIÓN DE TRIVY
+      # =========================================================
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+            gpg --dearmor | \
+            sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | \
+            sudo tee /etc/apt/sources.list.d/trivy.list
+
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      # =========================================================
+      # EJECUCIÓN DE TRIVY (Incluye UNKNOWN y bloquea con Exit Code 1)
+      # =========================================================
+      - name: Run Trivy Filesystem Scan
+        run: |
+          trivy fs . \
+            --severity UNKNOWN,MEDIUM,HIGH,CRITICAL \
+            --exit-code 1
+
+      # Este paso solo corre si Trivy no detecta fallos en los niveles indicados arriba
+      - name: Pipeline Finished
+        run: echo "Trivy scan completed successfully. No UNKNOWN, MEDIUM, HIGH or CRITICAL vulnerabilities found."
