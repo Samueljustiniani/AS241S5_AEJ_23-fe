@@ -16,6 +16,8 @@ jobs:
   ci:
     name: Install, Test and Build
     runs-on: ubuntu-latest
+    env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
 
     steps:
       - name: Checkout repository
@@ -51,23 +53,19 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Notify Discord (success)
-        if: ${{ always() && job.status == 'success' && secrets.DISCORD_WEBHOOK != '' }}
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        if: ${{ success() && env.DISCORD_WEBHOOK != '' }}
         run: |
           curl -sS -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d "{\"content\":\"CI EXITOSO\nRepo: ${{ github.repository }}\nRama: ${{ github.ref_name }}\nActor: ${{ github.actor }}\nEvento: ${{ github.event_name }}\nCommit: ${{ github.sha }}\nRun: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
 
       - name: Notify Discord (failure)
-        if: ${{ always() && job.status == 'failure' && secrets.DISCORD_WEBHOOK != '' }}
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        if: ${{ failure() && env.DISCORD_WEBHOOK != '' }}
         run: |
           curl -sS -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d "{\"content\":\"CI FALLIDO\nRepo: ${{ github.repository }}\nRama: ${{ github.ref_name }}\nActor: ${{ github.actor }}\nEvento: ${{ github.event_name }}\nCommit: ${{ github.sha }}\nRun: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
 
       - name: Discord webhook not configured
-        if: ${{ always() && secrets.DISCORD_WEBHOOK == '' }}
+        if: ${{ always() && env.DISCORD_WEBHOOK == '' }}
         run: echo "DISCORD_WEBHOOK no esta configurado. Se omite notificacion." >> "$GITHUB_STEP_SUMMARY"
