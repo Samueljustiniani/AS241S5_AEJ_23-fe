@@ -1,0 +1,73 @@
+name: Frontend CI Pipeline
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Install, Test and Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test -- --watch=false
+
+      - name: Build project
+        run: npm run build
+
+      - name: CI Summary
+        if: always()
+        run: |
+          {
+            echo "## CI Pipeline Summary"
+            echo "- Status: **${{ job.status }}**"
+            echo "- Actor: **${{ github.actor }}**"
+            echo "- Event: **${{ github.event_name }}**"
+            echo "- Branch: **${{ github.ref_name }}**"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Repository: **${{ github.repository }}**"
+            echo "- Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify Discord (success)
+        if: ${{ always() && job.status == 'success' && secrets.DISCORD_WEBHOOK != '' }}
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -sS -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\":\"CI EXITOSO\nRepo: ${{ github.repository }}\nRama: ${{ github.ref_name }}\nActor: ${{ github.actor }}\nEvento: ${{ github.event_name }}\nCommit: ${{ github.sha }}\nRun: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+
+      - name: Notify Discord (failure)
+        if: ${{ always() && job.status == 'failure' && secrets.DISCORD_WEBHOOK != '' }}
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -sS -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\":\"CI FALLIDO\nRepo: ${{ github.repository }}\nRama: ${{ github.ref_name }}\nActor: ${{ github.actor }}\nEvento: ${{ github.event_name }}\nCommit: ${{ github.sha }}\nRun: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+
+      - name: Discord webhook not configured
+        if: ${{ always() && secrets.DISCORD_WEBHOOK == '' }}
+        run: echo "DISCORD_WEBHOOK no esta configurado. Se omite notificacion." >> "$GITHUB_STEP_SUMMARY"
